@@ -4,17 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Terrorism Analysis and Insights</title>
+    <style>
+        .main-content {
+            margin: 20px auto;
+            max-width: 1200px;
+        }
+        .map-section {
+            margin-bottom: 2rem;
+        }
+        .duty-section {
+            margin: 2rem 0;
+        }
+        .social-section {
+            margin-top: 2rem;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
 </head>
 <body>
-    <h1>Terrorism Analysis and Insights</h1>
-    <div id="comic">
-    <img src="IMG_4015.jpeg" alt="Map of Terrorism Events" width="100%" height="600">
-    </div>
-    <br>
-    <h3>Duty</h3>
-    <br>
-    <div id="bottom">
-    <img src="https://valorantdataset.s3.us-east-1.amazonaws.com/fb.jpg">
-    </div>
+    <main class="main-content">
+        <h1 class="page-title">Terrorism Analysis and Insights</h1>
+        
+        <section class="map-section" id="map-container">
+            <img src="IMG_4015.jpeg" 
+                 alt="Map of Terrorism Events" 
+                 class="map-image"
+                 width="100%" 
+                 height="600">
+        </section>
+
+        <section class="duty-section" id="duty-container">
+            <h2 class="section-title">Duty</h2>
+        </section>
+
+        <section class="social-section" id="social-container">
+            <img src="https://valorantdataset.s3.us-east-1.amazonaws.com/fb.jpg" 
+                 alt="Facebook Logo"
+                 class="social-image"
+                 width="200" 
+                 height="auto">
+        </section>
+    </main>
 </body>
 </html>
