@@ -16,9 +16,15 @@ from dash import dcc
 import plotly.graph_objects as go
 import plotly.express as px
 from dash.exceptions import PreventUpdate
+from flask import Flask, request, jsonify
+import os
+import requests
 
 # Global variables
-app = dash.Dash()  # creating object of our app
+app = dash.Dash(__name__)
+server = app.server  # Access the underlying Flask server instance
+
+
 
 
 def load_data():
@@ -84,8 +90,36 @@ def load_data():
 
 
 def open_webbrowser():
-    url = "http://127.0.0.1:8050/"  # Dash always runs the server on this ip:port address http://127.0.0.1:8050/
+    url = "http://127.0.0.1:8080/"  # Dash always runs the server on this ip:port address http://127.0.0.1:8050/
     webbrowser.open_new(url)
+
+@server.route('/api/filter-data', methods=['POST'])
+def filter_data():
+    data = request.json  # Get the JSON data from the request
+
+    # Retrieve filter values from the JSON payload
+    region = data.get("region", [])
+    country = data.get("country", [])
+    attack_type = data.get("attack_type", [])
+    year_start = data.get("year_start", min(year_list))  # Default to the earliest year if not provided
+    year_end = data.get("year_end", max(year_list))      # Default to the latest year if not provided
+
+    # Create a year range from year_start and year_end
+    year_range = range(year_start, year_end + 1)
+
+    # Apply filters to the DataFrame
+    filtered_df = df.copy()
+    filtered_df = filtered_df[filtered_df['iyear'].isin(year_range)]
+    if region:
+        filtered_df = filtered_df[filtered_df['region_txt'].isin(region)]
+    if country:
+        filtered_df = filtered_df[filtered_df['country_txt'].isin(country)]
+    if attack_type:
+        filtered_df = filtered_df[filtered_df['attacktype1_txt'].isin(attack_type)]
+
+    # Return the filtered data as a JSON response
+    result = filtered_df.to_dict(orient='records')
+    return jsonify(result)
 
 
 def create_app_ui():
@@ -213,92 +247,53 @@ def create_app_ui():
      In('subtabs2', 'value')
      ]
 )
-def update_app_ui(tabs, month_value, day_value, region_value, country_value, state_value, city_value, attack_type_val,
-                  year_value, cyear_value, chart_dp_values, search, subtabs2):
+
+def update_app_ui(tabs, month_value, day_value, region_value, country_value, state_value, city_value, 
+                  attack_type_val, year_value, cyear_value, chart_dp_values, search, subtabs2):
     fig = None
+
     if tabs == 'Map':
-        print('Data type of month : ', str(type(month_value)))
-        print('Month selected ', str(month_value))
-        print('Data type of day : ', str(type(day_value)))
-        print('day selected ', str(day_value))
-        print('Data type of region : ', str(type(region_value)))
-        print('Region selected ', str(region_value))
-        print('Data type of country : ', str(type(country_value)))
-        print('Country selected ', str(country_value))
-        print('Data type of state : ', str(type(state_value)))
-        print('State selected ', str(state_value))
-        print('Data type of city : ', str(type(city_value)))
-        print('city selected ', str(city_value))
-        print('Data type of attack type : ', str(type(attack_type_val)))
-        print('Attack type selected ', str(attack_type_val))
-        print('Data type of year : ', str(type(year_value)))
-        print('Year selected : ', str(year_value))
-    
-        # year range
-        year_range = range(year_value[0], year_value[1] + 1)
-        new_df = df[df['iyear'].isin(year_range)]
-    
-        # month filter
-        if month_value == [] or month_value is None:
-            pass
-        else:
-            if day_value == [] or day_value is None:
-                new_df = new_df[new_df['imonth'].isin(month_value)]
-            else:
-                new_df = new_df[(new_df['imonth'].isin(month_value))
-                                & (new_df['iday'].isin(day_value))]
+        # Define the year range from the slider
+        year_start, year_end = year_value if year_value else (1970, 2018)
 
-        # region country state city filter
-        if region_value == [] or region_value is None:
-            pass
-        else:
-            if country_value == [] or country_value is None:
-                new_df = new_df[new_df['region_txt'].isin(region_value)]
-            else:
-                if state_value == [] or state_value is None:
-                    new_df = new_df[(new_df['region_txt'].isin(region_value))
-                                    & (new_df['country_txt'].isin(country_value))]
-                else:
-                    if city_value == [] or city_value is None:
-                        new_df = new_df[(new_df['region_txt'].isin(region_value))
-                                        & (new_df['country_txt'].isin(country_value))
-                                        & (new_df['provstate'].isin(state_value))]
-                    else:
-                        new_df = new_df[(new_df['region_txt'].isin(region_value))
-                                        & (new_df['country_txt'].isin(country_value))
-                                        & (new_df['provstate'].isin(state_value))
-                                        & (new_df['city'].isin(city_value))]
+        # Create the payload for the API request
+        payload = {
+            "region": region_value if region_value else [],
+            "country": country_value if country_value else [],
+            "state": state_value if state_value else [],
+            "city": city_value if city_value else [],
+            "attack_type": attack_type_val if attack_type_val else [],
+            "year_start": year_start,
+            "year_end": year_end,
+            "month": month_value if month_value else [],
+            "day": day_value if day_value else []
+        }
 
-        # Attack type filter
-        if attack_type_val == [] or attack_type_val is None:
-            pass
-        else:
-            new_df = new_df[new_df['attacktype1_txt'].isin(attack_type_val)]
+        # Call the API to fetch the filtered data
+        try:
+            response = requests.post('http://127.0.0.1:8080/api/filter-data', json=payload)
+            response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
+            data = response.json()  # Parse JSON response
+        except requests.exceptions.RequestException as e:
+            return html.Div(f"Error fetching data from API: {e}")
 
-        # You should always set the figure for blank, since this callback
-        # is called once when it is drawing for first time
-        figure = go.Figure()
-        if new_df.shape[0]:
-            pass
-        else:
-            new_df = pd.DataFrame(
-                columns=['iyear', 'imonth', 'iday', 'country_txt', 'region_txt', 'provstate',
-                         'city', 'latitude', 'longitude', 'attacktype1_txt', 'nkill'])
-            new_df.loc[0] = [0, 0, 0, None, None, None, None, None, None, None, None]
+        # Convert the JSON response to a DataFrame
+        if not data:
+            return html.Div("No data available for the selected filters.")
+        new_df = pd.DataFrame(data)
 
-        figure = px.scatter_mapbox(new_df,
-                                   lat='latitude',
-                                   lon='longitude',
-                                   hover_data=['region_txt', 'country_txt', 'provstate', 'city',
-                                               'attacktype1_txt',
-                                               'nkill',
-                                               'iyear'],
-                                   zoom=1,
-                                   color='attacktype1_txt',
-                                   height=650
-                                   )
+        # Create the map figure
+        fig = px.scatter_mapbox(
+            new_df,
+            lat='latitude',
+            lon='longitude',
+            hover_data=['region_txt', 'country_txt', 'provstate', 'city', 'attacktype1_txt', 'nkill', 'iyear'],
+            zoom=1,
+            color='attacktype1_txt',
+            height=650
+        )
 
-        figure.update_layout(
+        fig.update_layout(
             mapbox_style='carto-positron',
             mapbox_accesstoken=token,
             autosize=True,
@@ -306,38 +301,29 @@ def update_app_ui(tabs, month_value, day_value, region_value, country_value, sta
             template='plotly_dark'
         )
 
-        fig = figure
-
     elif tabs == 'Chart':
-        fig = None
-        year_range_c = range(cyear_value[0], cyear_value[1]+1)
+        year_range_c = range(cyear_value[0], cyear_value[1] + 1) if cyear_value else range(2000, 2022)
         chart_df = df[df['iyear'].isin(year_range_c)]
-        
+
         if subtabs2 == 'WorldChart':
             pass
         elif subtabs2 == 'IndiaChart':
             chart_df = chart_df[(chart_df['region_txt'] == 'South Asia') & (chart_df['country_txt'] == 'India')]
-        if chart_dp_values is not None and chart_df.shape[0]:
-            if search is not None:
+
+        if chart_dp_values and chart_df.shape[0]:
+            if search:
                 chart_df = chart_df.groupby('iyear')[chart_dp_values].value_counts().reset_index(name='count')
                 chart_df = chart_df[chart_df[chart_dp_values].str.contains(search, case=False)]
             else:
                 chart_df = chart_df.groupby('iyear')[chart_dp_values].value_counts().reset_index(name='count')
-        if chart_df.shape[0]:
-            pass
-        else:
+
+        if chart_df.shape[0] == 0:
             chart_df = pd.DataFrame(columns=['iyear', 'count', chart_dp_values])
             chart_df.iloc[0] = [0, 0, 'No Data']
-        chart_fig = px.area(chart_df,
-                            x='iyear',
-                            y='count',
-                            color=chart_dp_values,
-                            template='plotly_dark'
-                            )
-        fig = chart_fig
-        
-    return dcc.Graph(figure=fig)
 
+        fig = px.area(chart_df, x='iyear', y='count', color=chart_dp_values, template='plotly_dark')
+
+    return dcc.Graph(figure=fig)
     
 @app.callback(
     Out('day', 'options'),
@@ -427,7 +413,7 @@ def main():
     app.layout = create_app_ui()
     app.title = "Terrorism Analysis And Insights"
     
-    app.run_server()
+    app.run_server(debug=True, host="0.0.0.0", port=8080)
     
     app = None
     df = None
